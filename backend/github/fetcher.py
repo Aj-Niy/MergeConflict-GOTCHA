@@ -12,6 +12,7 @@ GITHUB_API = "https://api.github.com"
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
+#github username alt-test(0)
 HEADERS = {
     "User-Agent": "GOTCHA-AI",
 }
@@ -19,6 +20,8 @@ HEADERS = {
 if GITHUB_TOKEN:
     HEADERS["Authorization"] = f"Bearer {GITHUB_TOKEN}"
     
+
+# test line
 print("GitHub token loaded:", bool(GITHUB_TOKEN))
 print("Token starts with:", GITHUB_TOKEN[:10] if GITHUB_TOKEN else None)
 

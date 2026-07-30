@@ -26,7 +26,7 @@ app.include_router(scan_router)
 @app.get("/")
 def root():
     return {
-        "message": "SkillScope Backend Running"
+        "message": "GOTCHA Backend Running"
     }
 
 
