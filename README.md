@@ -16,7 +16,7 @@
   <em>"Don't just scan the code. Verify the claim."</em>
 </p>
 <p align="center">
-  Checkout GTCHA Here : <a href="https://gotcha-frontend-mauve.vercel.app">Visit Website</a>
+  Checkout GOTCHA Here : <a href="https://gotcha-frontend-mauve.vercel.app">Visit Website</a>
 </p>
 
 <p align="center">
