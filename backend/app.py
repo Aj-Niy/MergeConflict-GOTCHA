@@ -1,37 +1,11 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import sys
+from pathlib import Path
 
-from api.scan import router as scan_router
+# Add backend directory to sys.path
+sys.path.insert(0, str(Path(__file__).parent))
 
-from database.database import Base, engine
+from app.main import app
 
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(
-    title="GOTCHA API",
-    version="1.0.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(scan_router)
-
-
-@app.get("/")
-def root():
-    return {
-        "message": "GOTCHA Backend Running"
-    }
-
-
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy"
-    }
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
