@@ -1,7 +1,13 @@
-﻿[build-system]
+[build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.vercel]
-framework = "python"
-entrypoint = "backend.app:app"
+[project]
+name = "gotcha"
+version = "2.0.0"
+description = "GOTCHA Trust Verification Engine"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
