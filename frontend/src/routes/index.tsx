@@ -6,6 +6,9 @@ import ReportsListPage from "../features/reports/ReportsListPage";
 import TrustReportPage from "../features/reports/TrustReportPage";
 import HistoryPage from "../features/history/HistoryPage";
 import SettingsPage from "../features/settings/SettingsPage";
+import PoliciesPage from "../features/policies/PoliciesPage";
+import BatchesPage from "../features/batches/BatchesPage";
+import AttestationViewerPage from "../features/attestation/AttestationViewerPage";
 import { AppShell } from "../components/layout/AppShell";
 
 const rootRoute = createRootRoute({
@@ -48,6 +51,24 @@ const reportDetailRoute = createRoute({
   component: TrustReportPage,
 });
 
+const batchesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/batches",
+  component: BatchesPage,
+});
+
+const policiesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/policies",
+  component: PoliciesPage,
+});
+
+const attestationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/attestations",
+  component: AttestationViewerPage,
+});
+
 const historyRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/history",
@@ -67,6 +88,9 @@ const routeTree = rootRoute.addChildren([
     verifyRoute,
     reportsRoute,
     reportDetailRoute,
+    batchesRoute,
+    policiesRoute,
+    attestationsRoute,
     historyRoute,
     settingsRoute,
   ]),

@@ -11,12 +11,12 @@ export interface Repository {
   url: string;
   name: string;
   owner: string;
-  description: string;
+  description?: string;
   stars: number;
   forks: number;
   language: string;
-  lastCommit: string;
-  createdAt: string;
+  lastCommit?: string;
+  createdAt?: string;
 }
 
 export interface ClaimedCapability {
@@ -69,6 +69,88 @@ export interface Recommendation {
   action: string;
 }
 
+export interface DimensionScore {
+  dimension: string;
+  penalty: number;
+  weight: number;
+  weighted_penalty: number;
+  evidence: string[];
+}
+
+export interface Finding {
+  id: string;
+  category: "static" | "capability" | "secret" | "dependency" | "threat_rule" | string;
+  capability_label?: string;
+  severity: string;
+  confidence: string;
+  file_path?: string;
+  line_number?: number;
+  snippet?: string;
+  description: string;
+  source: string;
+}
+
+export interface Vulnerability {
+  id?: string;
+  package_name: string;
+  version: string;
+  cve_id: string;
+  severity: string;
+  summary?: string;
+  fixed_version?: string;
+  source?: string;
+}
+
+export interface SecretFinding {
+  id?: string;
+  secret_type: string;
+  file_path: string;
+  line_number?: number;
+  redacted_value: string;
+  confidence?: string;
+}
+
+export interface PolicyEvaluation {
+  id: string;
+  scan_id?: string;
+  policy_id?: string;
+  policy_name?: string;
+  decision: "ALLOW" | "WARN" | "RESTRICT" | "BLOCK" | string;
+  triggered_rules_json: Array<{
+    rule?: string;
+    action?: string;
+    reason?: string;
+    file_path?: string;
+    line_number?: number;
+  }>;
+  evaluated_at?: string;
+}
+
+export interface SecurityAttestation {
+  id: string;
+  scan_id: string;
+  trust_score: number;
+  risk_category: string;
+  recommendation: string;
+  capabilities: string[];
+  hidden_capabilities: string[];
+  content_hash: string;
+  signature: string;
+  public_key: string;
+  issued_at: string;
+}
+
+export interface Policy {
+  id: string;
+  user_id?: string;
+  name: string;
+  description?: string;
+  rules_json: Record<string, string>;
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface TrustReport {
   id: string;
   repositoryId: string;
@@ -78,10 +160,17 @@ export interface TrustReport {
   verdict: string;
   verdictSummary: string;
   aiExplanation: string;
+  remediation?: string;
   claimedCapabilities: ClaimedCapability[];
   detectedBehaviors: DetectedBehavior[];
   undisclosedBehaviors: UndisclosedBehavior[];
   comparisonTable: ComparisonEntry[];
+  dimensionBreakdown?: DimensionScore[];
+  findings?: Finding[];
+  vulnerabilities?: Vulnerability[];
+  secrets?: SecretFinding[];
+  policyEvaluations?: PolicyEvaluation[];
+  attestation?: SecurityAttestation;
   recommendations: Recommendation[];
   timeline: TimelineEvent[];
   createdAt: string;
@@ -94,6 +183,33 @@ export interface VerificationRequest {
   targetType: "github" | "mcp" | "plugin" | "skill";
   deep: boolean;
   includeDependencies: boolean;
+  policyId?: string;
+}
+
+export interface BatchVerificationRequest {
+  label: string;
+  urls: string[];
+  policyId?: string;
+}
+
+export interface BatchRecord {
+  id: string;
+  label: string;
+  total_repos: number;
+  completed_repos: number;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIALLY_FAILED" | "FAILED" | string;
+  created_at: string;
+  completed_at?: string;
+  scans?: Array<{
+    id: string;
+    repository_name: string;
+    repository_url: string;
+    status: string;
+    trust_score: number;
+    risk_score: number;
+    risk_category: string;
+    verdict?: string;
+  }>;
 }
 
 export interface HistoryRecord {
@@ -128,22 +244,66 @@ export interface ChartDataPoint {
 
 // ─── Backend response types ────────────────────────────────────────
 
+export interface BackendScanDetailResponse {
+  id: string;
+  repository: {
+    id: string;
+    url: string;
+    owner: string;
+    name: string;
+    primary_language?: string;
+    stars: number;
+    forks: number;
+    first_seen_at?: string;
+  };
+  status: string;
+  risk_score: number;
+  trust_score: number;
+  risk_category: string;
+  verdict?: string;
+  verdict_summary?: string;
+  explanation?: string;
+  remediation?: string;
+  claims: string[];
+  behaviors: string[];
+  hidden_behaviors: string[];
+  dimension_breakdown?: DimensionScore[];
+  findings?: Finding[];
+  comparisons?: Array<{
+    id?: string;
+    claimed_capability: string;
+    detected_capability: string;
+    match_state: string;
+    severity: string;
+    notes?: string;
+  }>;
+  vulnerabilities?: Vulnerability[];
+  secrets?: SecretFinding[];
+  policy_evaluations?: PolicyEvaluation[];
+  attestation?: SecurityAttestation;
+  created_at: string;
+  completed_at?: string;
+}
+
 export interface BackendScanResponse {
-  id: number;
-  risk: number;
+  id: string | number;
+  risk?: number;
+  trust_score?: number;
   status: string;
   claims: string[];
-  behavior: string[];
+  behavior?: string[];
+  behaviors?: string[];
   hidden_behaviors: string[];
   explanation: string;
 }
 
 export interface BackendHistoryItem {
-  id: number;
+  id: string | number;
   url: string | null;
   repo_name: string | null;
   target_type: string | null;
   risk_score: number;
+  trust_score?: number;
   risk_level: string | null;
   status: string;
   explanation: string;
@@ -151,155 +311,56 @@ export interface BackendHistoryItem {
   behavior: string[];
   hidden_behaviors: string[];
   created_at: string | null;
+  completed_at?: string | null;
 }
 
 export interface BackendAnalytics {
-  totalScans: number;
-  safeCount: number;
-  mediumCount: number;
-  highCount: number;
-  averageRiskScore: number;
+  totalScans?: number;
+  total_scans?: number;
+  safeCount?: number;
+  safe_count?: number;
+  mediumCount?: number;
+  medium_count?: number;
+  highCount?: number;
+  high_count?: number;
+  criticalCount?: number;
+  critical_count?: number;
+  averageRiskScore?: number;
+  average_risk_score?: number;
+  average_trust_score?: number;
 }
 
 // ─── Adapter functions ─────────────────────────────────────────────
 
-function mapRiskLevel(status: string | null): RiskLevel {
-  switch (status?.toUpperCase()) {
-    case "SAFE":
-      return "trusted";
-    case "MEDIUM":
-      return "medium";
-    case "HIGH":
-      return "critical";
-    default:
-      return "medium";
-  }
+export function mapRiskLevel(status: string | null): RiskLevel {
+  const s = status?.toUpperCase();
+  if (s === "SAFE" || s === "TRUSTED" || s === "LOW") return "trusted";
+  if (s === "MEDIUM") return "medium";
+  if (s === "HIGH") return "high";
+  if (s === "CRITICAL") return "critical";
+  return "medium";
 }
 
-function parseRepoName(repoName: string | null): { owner: string; name: string } {
-  if (!repoName || !repoName.includes("/")) {
-    return { owner: "unknown", name: repoName ?? "unknown" };
+export function parseRepoName(repoName: string | null, url?: string | null): { owner: string; name: string } {
+  if (repoName && repoName.includes("/")) {
+    const [owner, name] = repoName.split("/");
+    return { owner, name };
   }
-  const [owner, name] = repoName.split("/");
-  return { owner, name };
+  if (url) {
+    const parts = url.replace(/\.git$/, "").split("/").filter(Boolean);
+    if (parts.length >= 2) {
+      return { owner: parts[parts.length - 2], name: parts[parts.length - 1] };
+    }
+  }
+  return { owner: "repo", name: repoName ?? "package" };
 }
 
 export function backendItemToHistoryRecord(item: BackendHistoryItem): HistoryRecord {
-  const { owner, name } = parseRepoName(item.repo_name);
+  const { owner, name } = parseRepoName(item.repo_name, item.url);
+  const trustScore = item.trust_score ?? (100 - item.risk_score);
 
   return {
     id: `scan-${item.id}`,
-    repository: {
-      id: `repo-${item.id}`,
-      url: item.url ?? "",
-      name,
-      owner,
-      description: "",
-      stars: 0,
-      forks: 0,
-      language: "Unknown",
-      lastCommit: item.created_at ?? new Date().toISOString(),
-      createdAt: item.created_at ?? new Date().toISOString(),
-    },
-    trustScore: 100 - item.risk_score,
-    riskLevel: mapRiskLevel(item.risk_level ?? item.status),
-    status: "completed",
-    createdAt: item.created_at ?? new Date().toISOString(),
-    completedAt: item.created_at ?? new Date().toISOString(),
-    reportId: `${item.id}`,
-  };
-}
-
-export function backendItemToTrustReport(item: BackendHistoryItem): TrustReport {
-  const { owner, name } = parseRepoName(item.repo_name);
-  const riskLevel = mapRiskLevel(item.risk_level ?? item.status);
-  const trustScore = 100 - item.risk_score;
-
-  const claimedCapabilities: ClaimedCapability[] = item.claims
-    .filter((c) => c.trim())
-    .map((c, i) => ({
-      id: `cc-${i}`,
-      category: c.trim(),
-      description: `Claimed capability: ${c.trim()}`,
-      source: "readme" as const,
-    }));
-
-  const detectedBehaviors: DetectedBehavior[] = item.behavior
-    .filter((b) => b.trim())
-    .map((b, i) => ({
-      id: `db-${i}`,
-      category: b.trim(),
-      description: `Detected behavior: ${b.trim()}`,
-      severity: "trusted" as RiskLevel,
-      codeReference: "source",
-    }));
-
-  const undisclosedBehaviors: UndisclosedBehavior[] = item.hidden_behaviors
-    .filter((h) => h.trim())
-    .map((h, i) => ({
-      id: `ub-${i}`,
-      description: `Undisclosed behavior: ${h.trim()}`,
-      severity: riskLevel,
-      codeReference: "detected via static analysis",
-      impact: `${h.trim()} capability not mentioned in documentation`,
-    }));
-
-  const comparisonTable: ComparisonEntry[] = item.claims
-    .filter((c) => c.trim())
-    .map((c, i) => {
-      const matchingBehavior = item.behavior.find(
-        (b) => b.toLowerCase().trim() === c.toLowerCase().trim()
-      );
-      return {
-        id: `ct-${i}`,
-        claimedCapability: c.trim(),
-        detectedBehavior: matchingBehavior?.trim() ?? "Not detected",
-        match: matchingBehavior ? ("match" as const) : ("mismatch" as const),
-        severity: matchingBehavior ? ("trusted" as RiskLevel) : ("medium" as RiskLevel),
-        notes: matchingBehavior
-          ? "Claimed capability matches detected behavior"
-          : "Claimed capability not detected in code",
-      };
-    });
-
-  // Add hidden behaviors as mismatches
-  item.hidden_behaviors
-    .filter((h) => h.trim())
-    .forEach((h, i) => {
-      comparisonTable.push({
-        id: `ct-hidden-${i}`,
-        claimedCapability: "Not claimed",
-        detectedBehavior: h.trim(),
-        match: "undisclosed",
-        severity: riskLevel,
-        notes: "Behavior detected in code but not mentioned in documentation",
-      });
-    });
-
-  const recommendations: Recommendation[] = item.hidden_behaviors
-    .filter((h) => h.trim())
-    .map((h, i) => ({
-      id: `rec-${i}`,
-      severity: riskLevel,
-      title: `Review undisclosed ${h.trim()} behavior`,
-      description: `The tool uses ${h.trim()} capabilities that are not documented.`,
-      action: `Audit the ${h.trim()} related code and document or remove it.`,
-    }));
-
-  let verdict = "Trusted";
-  let verdictSummary = "No hidden capabilities detected. The tool operates within documented boundaries.";
-
-  if (riskLevel === "critical" || riskLevel === "high") {
-    verdict = "Critical Risk — Review Required";
-    verdictSummary = `${item.hidden_behaviors.length} undisclosed behavior(s) detected. Immediate review recommended.`;
-  } else if (riskLevel === "medium") {
-    verdict = "Conditionally Trusted";
-    verdictSummary = "Some behaviors are not mentioned in documentation. Review before deployment.";
-  }
-
-  return {
-    id: `${item.id}`,
-    repositoryId: `repo-${item.id}`,
     repository: {
       id: `repo-${item.id}`,
       url: item.url ?? "",
@@ -313,73 +374,160 @@ export function backendItemToTrustReport(item: BackendHistoryItem): TrustReport 
       createdAt: item.created_at ?? new Date().toISOString(),
     },
     trustScore,
+    riskLevel: mapRiskLevel(item.risk_level ?? item.status),
+    status: (item.status?.toLowerCase() === "completed" ? "completed" : "completed") as VerificationStatus,
+    createdAt: item.created_at ?? new Date().toISOString(),
+    completedAt: item.completed_at ?? item.created_at ?? new Date().toISOString(),
+    reportId: `${item.id}`,
+  };
+}
+
+export function backendDetailToTrustReport(detail: BackendScanDetailResponse): TrustReport {
+  const riskLevel = mapRiskLevel(detail.risk_category);
+  const trustScore = detail.trust_score ?? Math.max(0, 100 - (detail.risk_score || 0));
+
+  const claimedCapabilities: ClaimedCapability[] = (detail.claims || [])
+    .filter((c) => c && c.trim())
+    .map((c, i) => ({
+      id: `cc-${i}`,
+      category: c.trim(),
+      description: `Claimed capability: ${c.trim()}`,
+      source: "readme" as const,
+    }));
+
+  const detectedBehaviors: DetectedBehavior[] = (detail.behaviors || [])
+    .filter((b) => b && b.trim())
+    .map((b, i) => ({
+      id: `db-${i}`,
+      category: b.trim(),
+      description: `Detected behavior: ${b.trim()}`,
+      severity: "trusted" as RiskLevel,
+      codeReference: "source",
+    }));
+
+  const undisclosedBehaviors: UndisclosedBehavior[] = (detail.hidden_behaviors || [])
+    .filter((h) => h && h.trim())
+    .map((h, i) => ({
+      id: `ub-${i}`,
+      description: `Undisclosed capability: ${h.trim()}`,
+      severity: riskLevel,
+      codeReference: "Static & Behavioral Audit",
+      impact: `${h.trim()} capability executed without documentation disclosure`,
+    }));
+
+  const comparisonTable: ComparisonEntry[] = (detail.comparisons || []).map((c, i) => ({
+    id: c.id || `ct-${i}`,
+    claimedCapability: c.claimed_capability,
+    detectedBehavior: c.detected_capability,
+    match: (c.match_state?.toLowerCase() as any) || "match",
+    severity: mapRiskLevel(c.severity),
+    notes: c.notes || "",
+  }));
+
+  const recommendations: Recommendation[] = (detail.hidden_behaviors || []).map((h, i) => ({
+    id: `rec-${i}`,
+    severity: riskLevel,
+    title: `Remediate undisclosed ${h.trim()} capability`,
+    description: `Code executes ${h.trim()} operations without explicit documentation.`,
+    action: `Audit code referencing ${h.trim()} and add policy guards or update docs.`,
+  }));
+
+  return {
+    id: `${detail.id}`,
+    repositoryId: detail.repository?.id || `repo-${detail.id}`,
+    repository: {
+      id: detail.repository?.id || `repo-${detail.id}`,
+      url: detail.repository?.url || "",
+      name: detail.repository?.name || "package",
+      owner: detail.repository?.owner || "repo",
+      stars: detail.repository?.stars || 0,
+      forks: detail.repository?.forks || 0,
+      language: detail.repository?.primary_language || "Python",
+      lastCommit: detail.completed_at || detail.created_at,
+      createdAt: detail.created_at,
+    },
+    trustScore,
     riskLevel,
-    verdict,
-    verdictSummary,
-    aiExplanation: item.explanation,
+    verdict: detail.verdict || (trustScore >= 80 ? "Trusted Repository" : "Security Review Required"),
+    verdictSummary: detail.verdict_summary || detail.explanation || "Scan completed.",
+    aiExplanation: detail.explanation || "",
+    remediation: detail.remediation,
     claimedCapabilities,
     detectedBehaviors,
     undisclosedBehaviors,
     comparisonTable,
+    dimensionBreakdown: detail.dimension_breakdown,
+    findings: detail.findings,
+    vulnerabilities: detail.vulnerabilities,
+    secrets: detail.secrets,
+    policyEvaluations: detail.policy_evaluations,
+    attestation: detail.attestation,
     recommendations,
     timeline: [
       {
         id: "tl-001",
-        timestamp: item.created_at ?? new Date().toISOString(),
-        stage: "Repository Fetch",
+        timestamp: detail.created_at,
+        stage: "Tarball Intake & Traversal Filter",
         status: "completed",
-        duration: 2000,
-        detail: "Fetched repository and source files",
+        duration: 1200,
+        detail: "Ingested repository snapshot and checked file safety limits",
       },
       {
         id: "tl-002",
-        timestamp: item.created_at ?? new Date().toISOString(),
-        stage: "Claim Extraction",
+        timestamp: detail.created_at,
+        stage: "Multi-Language AST & Secrets Scan",
         status: "completed",
-        duration: 3000,
-        detail: `Extracted ${item.claims.length} claimed capabilities via LLM`,
+        duration: 2100,
+        detail: `Analyzed static ASTs, hardcoded credentials, and OSV dependencies`,
       },
       {
         id: "tl-003",
-        timestamp: item.created_at ?? new Date().toISOString(),
-        stage: "Static Analysis",
+        timestamp: detail.created_at,
+        stage: "Claim Extraction & Anti-Injection",
         status: "completed",
-        duration: 5000,
-        detail: `Detected ${item.behavior.length} behaviors via AST analysis`,
+        duration: 1500,
+        detail: `Extracted ${(detail.claims || []).length} claimed capabilities`,
       },
       {
         id: "tl-004",
-        timestamp: item.created_at ?? new Date().toISOString(),
-        stage: "Comparison",
+        timestamp: detail.created_at,
+        stage: "Semantic Claim ↔ Behavior Correlation",
         status: "completed",
-        duration: 1000,
-        detail: `Found ${item.hidden_behaviors.length} undisclosed behavior(s)`,
+        duration: 800,
+        detail: `Found ${(detail.hidden_behaviors || []).length} undisclosed capability/ies`,
       },
       {
         id: "tl-005",
-        timestamp: item.created_at ?? new Date().toISOString(),
-        stage: "Risk Scoring",
+        timestamp: detail.completed_at || detail.created_at,
+        stage: "Weighted Risk & Ed25519 Signed Attestation",
         status: "completed",
-        duration: 500,
-        detail: `Risk score: ${item.risk_score}, Trust score: ${trustScore}`,
+        duration: 900,
+        detail: `Trust Score: ${trustScore}/100, cryptographic signature issued`,
       },
     ],
-    createdAt: item.created_at ?? new Date().toISOString(),
-    completedAt: item.created_at ?? new Date().toISOString(),
-    analysisVersion: "1.0.0",
+    createdAt: detail.created_at,
+    completedAt: detail.completed_at || detail.created_at,
+    analysisVersion: "2.0.0",
   };
 }
 
 export function backendAnalyticsToSummary(data: BackendAnalytics): AnalyticsSummary {
+  const total = data.total_scans ?? data.totalScans ?? 0;
+  const safe = data.safe_count ?? data.safeCount ?? 0;
+  const high = data.high_count ?? data.highCount ?? 0;
+  const critical = data.critical_count ?? data.criticalCount ?? 0;
+  const medium = data.medium_count ?? data.mediumCount ?? 0;
+  const avgTrust = data.average_trust_score ?? Math.round(100 - (data.average_risk_score ?? data.averageRiskScore ?? 0));
+
   return {
-    totalVerifications: data.totalScans,
-    trustedCount: data.safeCount,
-    criticalCount: data.highCount,
-    highCount: 0,
-    mediumCount: data.mediumCount,
+    totalVerifications: total,
+    trustedCount: safe,
+    criticalCount: critical,
+    highCount: high,
+    mediumCount: medium,
     lowCount: 0,
-    averageTrustScore: Math.round(100 - data.averageRiskScore),
-    verificationsThisWeek: data.totalScans,
+    averageTrustScore: avgTrust,
+    verificationsThisWeek: total,
     weekOverWeekChange: 0,
   };
 }

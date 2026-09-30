@@ -1,22 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "@tanstack/react-router";
 import {
-  Star,
-  GitFork,
-  ExternalLink,
-  CheckCircle2,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
   AlertTriangle,
   XCircle,
-  Clock,
+  CheckCircle2,
+  Lock,
+  Key,
+  Package,
+  Layers,
   Sparkles,
   ArrowLeft,
-  ChevronRight,
-  Shield,
-  FileCode2,
-  Eye,
+  ExternalLink,
+  Code2,
+  Terminal,
+  FileText,
+  Clock,
   EyeOff,
+  Scale,
+  RefreshCw,
+  Check,
 } from "lucide-react";
-import { reportsApi } from "../../services/api";
+import { reportsApi, attestationApi } from "../../services/api";
 import { Header } from "../../components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
@@ -25,72 +33,47 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
 import { TrustScoreRing } from "../../components/ui/trust-score-ring";
 import { cn, formatDateTime, riskLevelBg, riskLevelDot, matchBadgeStyle } from "../../lib/utils";
-import type { TimelineEvent, ComparisonEntry } from "../../types";
+import type { TimelineEvent, ComparisonEntry, DimensionScore, Finding, Vulnerability, SecretFinding } from "../../types";
 
 function MatchIcon({ match }: { match: string }) {
   if (match === "match") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
   if (match === "partial") return <AlertTriangle className="h-4 w-4 text-amber-500" />;
   if (match === "mismatch") return <XCircle className="h-4 w-4 text-red-500" />;
-  return <EyeOff className="h-4 w-4 text-zinc-400" />;
+  return <EyeOff className="h-4 w-4 text-rose-500" />;
 }
 
-function TimelineRow({ event }: { event: TimelineEvent }) {
-  return (
-    <div className="flex gap-4">
-      <div className="flex flex-col items-center">
-        <div className={cn(
-          "h-2.5 w-2.5 rounded-full mt-1 shrink-0",
-          event.status === "completed" ? "bg-emerald-500" : event.status === "failed" ? "bg-red-500" : "bg-amber-400"
-        )} />
-        <div className="flex-1 w-px bg-zinc-100 mt-1" />
-      </div>
-      <div className="pb-4 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-sm font-medium text-zinc-900">{event.stage}</span>
-          {event.duration && (
-            <span className="text-xs text-zinc-400 font-mono">{(event.duration / 1000).toFixed(1)}s</span>
-          )}
-        </div>
-        <p className="text-xs text-zinc-500">{event.detail}</p>
-        <p className="text-[11px] text-zinc-400 mt-0.5">{formatDateTime(event.timestamp)}</p>
-      </div>
-    </div>
-  );
-}
-
-function ComparisonRow({ entry }: { entry: ComparisonEntry }) {
-  return (
-    <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
-      <td className="py-3 px-4 text-sm text-zinc-700 align-top">{entry.claimedCapability}</td>
-      <td className="py-3 px-4 text-sm text-zinc-700 align-top">{entry.detectedBehavior}</td>
-      <td className="py-3 px-4 align-top">
-        <div className="flex items-center gap-1.5">
-          <MatchIcon match={entry.match} />
-          <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded ring-1 ring-inset capitalize", matchBadgeStyle(entry.match))}>
-            {entry.match}
-          </span>
-        </div>
-      </td>
-      <td className="py-3 px-4 text-xs text-zinc-500 align-top max-w-xs">{entry.notes}</td>
-    </tr>
-  );
+function PolicyBadge({ decision }: { decision: string }) {
+  const d = decision?.toUpperCase();
+  if (d === "ALLOW") return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">ALLOW</span>;
+  if (d === "WARN") return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">WARN</span>;
+  if (d === "RESTRICT") return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">RESTRICT</span>;
+  return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">BLOCK</span>;
 }
 
 export default function TrustReportPage() {
   const { reportId } = useParams({ from: "/app/reports/$reportId" });
+  const [activeTab, setActiveTab] = useState("synthesis");
+  const [verifyResult, setVerifyResult] = useState<any>(null);
 
   const { data: report, isLoading, error } = useQuery({
     queryKey: ["report", reportId],
     queryFn: () => reportsApi.getById(reportId),
   });
 
+  const verifyMutation = useMutation({
+    mutationFn: () => attestationApi.verifyById(reportId),
+    onSuccess: (res) => {
+      setVerifyResult(res);
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <Header title="Trust Report" />
+        <Header title="Trust Verification Report" />
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-5xl mx-auto space-y-4">
-            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-48 w-full" />
             <Skeleton className="h-64 w-full" />
           </div>
         </div>
@@ -100,302 +83,458 @@ export default function TrustReportPage() {
 
   if (error || !report) {
     return (
-      <div className="flex flex-col h-full overflow-hidden">
-        <Header title="Trust Report" />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <XCircle className="h-8 w-8 text-red-400 mx-auto mb-3" />
-            <p className="text-sm text-zinc-600 mb-4">Report not found</p>
+      <div className="flex flex-col h-full">
+        <Header title="Trust Verification Report" />
+        <div className="flex-1 p-6 flex items-center justify-center">
+          <Card className="max-w-md w-full text-center p-6">
+            <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-zinc-900">Report Not Found</h3>
+            <p className="text-sm text-zinc-500 mt-1 mb-4">Could not retrieve scan report for ID: {reportId}</p>
             <Link to="/reports">
-              <Button variant="outline" size="sm">Back to reports</Button>
+              <Button variant="outline">Back to Reports</Button>
             </Link>
-          </div>
+          </Card>
         </div>
       </div>
     );
   }
 
-  const claimMatchCount = report.comparisonTable.filter((e) => e.match === "match").length;
-  const claimTotal = report.comparisonTable.length;
-  const analysisSeconds = Math.round(
-    (new Date(report.completedAt).getTime() - new Date(report.createdAt).getTime()) / 1000
-  );
+  const { repository, trustScore, riskLevel } = report;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-zinc-50/50">
       <Header
-        title="Trust Report"
-        description={`${report.repository.owner}/${report.repository.name}`}
-        action={
+        title="Trust Verification Report"
+        actions={
           <Link to="/reports">
-            <Button variant="ghost" size="sm" className="gap-1.5">
-              <ArrowLeft className="h-3.5 w-3.5" /> All reports
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              All Reports
             </Button>
           </Link>
         }
       />
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Report header */}
-        <div className="border-b border-zinc-200 bg-white px-6 py-5">
-          <div className="max-w-5xl mx-auto flex items-start justify-between gap-8">
-            <div className="flex items-start gap-5">
-              <TrustScoreRing score={report.trustScore} level={report.riskLevel} size="lg" />
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <a
-                    href={report.repository.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lg font-bold text-zinc-900 hover:text-indigo-700 transition-colors font-mono flex items-center gap-1.5"
-                  >
-                    {report.repository.owner}/{report.repository.name}
-                    <ExternalLink className="h-4 w-4 opacity-50" />
-                  </a>
-                  <Badge variant={report.riskLevel} className="capitalize text-xs">
-                    {report.riskLevel} risk
-                  </Badge>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Header Card */}
+          <Card className="border-zinc-200 bg-white shadow-sm overflow-hidden">
+            <div className="p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-zinc-100 rounded-xl">
+                    <Code2 className="h-7 w-7 text-zinc-700" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h1 className="text-xl font-bold text-zinc-900">{repository.owner}/{repository.name}</h1>
+                      <Badge className={cn("capitalize text-xs font-semibold px-2 py-0.5", riskLevelBg(riskLevel))}>
+                        {report.riskLevel} risk
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 mt-1.5">
+                      <span>Language: <strong className="text-zinc-700">{repository.language}</strong></span>
+                      <span>•</span>
+                      <span>Scan ID: <code className="font-mono text-zinc-600">{report.id}</code></span>
+                      <span>•</span>
+                      <span>Scanned: {formatDateTime(report.createdAt)}</span>
+                    </div>
+                    {repository.url && (
+                      <a
+                        href={repository.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium mt-2"
+                      >
+                        {repository.url}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <p className="text-base font-semibold text-zinc-800 mb-1">{report.verdict}</p>
-                <p className="text-sm text-zinc-500 max-w-xl leading-relaxed">{report.verdictSummary}</p>
-                <div className="flex items-center gap-4 mt-3 text-xs text-zinc-400">
-                  <span className="flex items-center gap-1"><Star className="h-3 w-3" />{report.repository.stars.toLocaleString()}</span>
-                  <span className="flex items-center gap-1"><GitFork className="h-3 w-3" />{report.repository.forks.toLocaleString()}</span>
-                  <span>{report.repository.language}</span>
-                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Analyzed in {analysisSeconds}s</span>
-                  <span>Engine v{report.analysisVersion}</span>
+
+                <div className="flex items-center gap-6 border-t md:border-t-0 md:border-l border-zinc-100 pt-4 md:pt-0 md:pl-6">
+                  <TrustScoreRing score={trustScore} size={84} strokeWidth={7} />
+                  <div>
+                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Overall Verdict</p>
+                    <p className="text-base font-bold text-zinc-900 mt-0.5">{report.verdict}</p>
+                    <p className="text-xs text-zinc-500 max-w-xs mt-1 leading-relaxed">{report.verdictSummary}</p>
+                  </div>
                 </div>
               </div>
             </div>
+          </Card>
 
-            {/* Quick stats */}
-            <div className="shrink-0 grid grid-cols-2 gap-3">
-              {[
-                { label: "Claimed", value: report.claimedCapabilities.length, icon: FileCode2, color: "text-zinc-700" },
-                { label: "Detected", value: report.detectedBehaviors.length, icon: Eye, color: "text-zinc-700" },
-                { label: "Matched", value: claimMatchCount + "/" + claimTotal, icon: CheckCircle2, color: "text-emerald-600" },
-                { label: "Undisclosed", value: report.undisclosedBehaviors.length, icon: EyeOff, color: report.undisclosedBehaviors.length > 0 ? "text-red-600" : "text-zinc-700" },
-              ].map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-center">
-                  <Icon className={cn("h-3.5 w-3.5 mx-auto mb-1", color)} />
-                  <p className={cn("text-base font-bold tabular-nums", color)}>{value}</p>
-                  <p className="text-[10px] text-zinc-400 uppercase tracking-wide">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+          {/* Main Navigation Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="bg-white border border-zinc-200 p-1 rounded-lg">
+              <TabsTrigger value="synthesis" className="text-xs gap-1.5">
+                <Scale className="h-3.5 w-3.5" />
+                5D Risk Breakdown
+              </TabsTrigger>
+              <TabsTrigger value="correlation" className="text-xs gap-1.5">
+                <Layers className="h-3.5 w-3.5" />
+                Claim ↔ Behavior Matrix
+              </TabsTrigger>
+              <TabsTrigger value="findings" className="text-xs gap-1.5">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                Findings & CVEs ({((report.findings?.length || 0) + (report.secrets?.length || 0) + (report.vulnerabilities?.length || 0))})
+              </TabsTrigger>
+              <TabsTrigger value="policy" className="text-xs gap-1.5">
+                <Lock className="h-3.5 w-3.5" />
+                Policy Decision
+              </TabsTrigger>
+              <TabsTrigger value="ai-explanation" className="text-xs gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                AI Intelligence & Fixes
+              </TabsTrigger>
+              <TabsTrigger value="attestation" className="text-xs gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Signed Attestation
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Tabs */}
-        <div className="px-6 py-6">
-          <div className="max-w-5xl mx-auto">
-            <Tabs defaultValue="overview">
-              <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="behaviors">Behaviors</TabsTrigger>
-                <TabsTrigger value="comparison">Comparison</TabsTrigger>
-                <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
-                <TabsTrigger value="timeline">Timeline</TabsTrigger>
-              </TabsList>
-
-              {/* OVERVIEW TAB */}
-              <TabsContent value="overview" className="space-y-5">
-                {/* AI Explanation */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-500" />
-                      AI Analysis
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-zinc-700 leading-relaxed">{report.aiExplanation}</p>
-                  </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-2 gap-5">
-                  {/* Claimed capabilities */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <FileCode2 className="h-4 w-4 text-zinc-400" />
-                        Claimed Capabilities
-                      </CardTitle>
-                      <CardDescription>From documentation and manifest</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-2.5">
-                        {report.claimedCapabilities.map((cap) => (
-                          <li key={cap.id} className="flex items-start gap-2">
-                            <ChevronRight className="h-4 w-4 text-zinc-300 shrink-0 mt-0.5" />
-                            <div>
-                              <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{cap.category}</span>
-                              <p className="text-sm text-zinc-700">{cap.description}</p>
-                              <Badge variant="outline" className="mt-1 text-[10px]">{cap.source}</Badge>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-
-                  {/* Detected behaviors */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Eye className="h-4 w-4 text-zinc-400" />
-                        Detected Behaviors
-                      </CardTitle>
-                      <CardDescription>From static code analysis</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-2.5">
-                        {report.detectedBehaviors.map((beh) => (
-                          <li key={beh.id} className="flex items-start gap-2">
-                            <span className={cn("h-2 w-2 rounded-full shrink-0 mt-1.5", riskLevelDot(beh.severity))} />
-                            <div>
-                              <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{beh.category}</span>
-                              <p className="text-sm text-zinc-700">{beh.description}</p>
-                              <p className="text-[11px] text-zinc-400 font-mono mt-0.5">{beh.codeReference}{beh.line ? `:${beh.line}` : ""}</p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Undisclosed behaviors */}
-                {report.undisclosedBehaviors.length > 0 && (
-                  <Card className={cn(report.undisclosedBehaviors.some(u => u.severity === "critical") && "border-red-200")}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-red-700">
-                        <EyeOff className="h-4 w-4" />
-                        Undisclosed Behaviors
-                        <Badge variant="critical" className="ml-1">{report.undisclosedBehaviors.length} found</Badge>
-                      </CardTitle>
-                      <CardDescription>Behaviors present in code but absent from documentation</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {report.undisclosedBehaviors.map((ub) => (
-                          <div key={ub.id} className={cn("rounded-lg border p-4", riskLevelBg(ub.severity).replace("text-", "border-").split(" ")[0], "bg-white border-zinc-200")}>
-                            <div className="flex items-start justify-between gap-4">
-                              <div>
-                                <p className="text-sm font-medium text-zinc-900">{ub.description}</p>
-                                <p className="text-xs text-zinc-500 mt-1">{ub.impact}</p>
-                                <p className="text-[11px] text-zinc-400 font-mono mt-1.5">{ub.codeReference}</p>
-                              </div>
-                              <Badge variant={ub.severity} className="shrink-0 capitalize">{ub.severity}</Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              {/* BEHAVIORS TAB */}
-              <TabsContent value="behaviors" className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  {report.detectedBehaviors.map((beh) => (
-                    <Card key={beh.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{beh.category}</span>
-                          <Badge variant={beh.severity} className="capitalize shrink-0">{beh.severity}</Badge>
+            {/* TAB 1: 5-Dimensional Risk Breakdown */}
+            <TabsContent value="synthesis" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {report.dimensionBreakdown && report.dimensionBreakdown.length > 0 ? (
+                  report.dimensionBreakdown.map((dim) => (
+                    <Card key={dim.dimension} className="border-zinc-200 bg-white">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-semibold text-zinc-900">{dim.dimension}</CardTitle>
+                          <Badge variant="outline" className="text-[11px] font-mono">
+                            Weight {(dim.weight * 100).toFixed(0)}%
+                          </Badge>
                         </div>
-                        <p className="text-sm text-zinc-800 mb-2">{beh.description}</p>
-                        <p className="text-xs font-mono text-zinc-400">{beh.codeReference}{beh.line ? `:${beh.line}` : ""}</p>
+                        <CardDescription className="text-xs text-zinc-500">
+                          Penalty: <strong className="text-zinc-800">{dim.penalty.toFixed(1)}</strong> → Weighted: <strong className="text-rose-600">-{dim.weighted_penalty.toFixed(1)} pts</strong>
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-1.5 pt-1">
+                          <p className="text-[11px] font-medium text-zinc-400 uppercase">Evidence Signals</p>
+                          {dim.evidence && dim.evidence.length > 0 ? (
+                            <ul className="space-y-1">
+                              {dim.evidence.slice(0, 3).map((ev, i) => (
+                                <li key={i} className="text-xs text-zinc-600 flex items-start gap-1.5 bg-zinc-50 p-1.5 rounded border border-zinc-100">
+                                  <span className="text-rose-500 shrink-0">•</span>
+                                  <span className="truncate">{ev}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs text-emerald-600 flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Clean (No violation detected)
+                            </p>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
-              </TabsContent>
+                  ))
+                ) : (
+                  <div className="col-span-3 text-center py-8 text-zinc-400 text-sm">
+                    Standard risk metrics computed. Check correlation matrix for detailed signals.
+                  </div>
+                )}
+              </div>
 
-              {/* COMPARISON TAB */}
-              <TabsContent value="comparison">
-                <Card className="overflow-hidden">
-                  <CardHeader>
-                    <CardTitle>Claimed vs Detected Comparison</CardTitle>
-                    <CardDescription>
-                      {claimMatchCount} of {claimTotal} claims matched — {report.comparisonTable.filter(e => e.match === "mismatch").length} mismatches detected
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <table className="w-full text-left">
-                      <thead className="border-b border-zinc-200 bg-zinc-50">
-                        <tr>
-                          <th className="py-2.5 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Claimed</th>
-                          <th className="py-2.5 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Detected</th>
-                          <th className="py-2.5 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Match</th>
-                          <th className="py-2.5 px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wide">Notes</th>
+              {/* Timeline Card */}
+              <Card className="border-zinc-200 bg-white">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-indigo-600" />
+                    Verification Pipeline Execution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-2">
+                    {report.timeline?.map((event) => (
+                      <div key={event.id} className="p-3 bg-zinc-50 rounded-lg border border-zinc-100">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-zinc-800">{event.stage}</span>
+                          <span className="text-[10px] font-mono text-zinc-400">{(event.duration ? (event.duration / 1000).toFixed(1) + 's' : 'done')}</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-500 leading-snug">{event.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* TAB 2: Claim ↔ Behavior Correlation Matrix */}
+            <TabsContent value="correlation" className="space-y-4">
+              <Card className="border-zinc-200 bg-white">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-zinc-900">Semantic Claim vs Code Behavior Correlation</CardTitle>
+                  <CardDescription className="text-xs text-zinc-500">
+                    Compares declared capabilities from documentation against observed execution in the AST analyzer.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-100 bg-zinc-50/75 text-[11px] uppercase tracking-wider text-zinc-500 font-semibold">
+                          <th className="py-3 px-4">Documentation Claim</th>
+                          <th className="py-3 px-4">Detected Code Behavior</th>
+                          <th className="py-3 px-4">Correlation State</th>
+                          <th className="py-3 px-4">Security Analysis Notes</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {report.comparisonTable.map((entry) => (
-                          <ComparisonRow key={entry.id} entry={entry} />
-                        ))}
+                      <tbody className="divide-y divide-zinc-100 text-sm">
+                        {report.comparisonTable && report.comparisonTable.length > 0 ? (
+                          report.comparisonTable.map((entry) => (
+                            <tr key={entry.id} className="hover:bg-zinc-50/50 transition-colors">
+                              <td className="py-3 px-4 font-medium text-zinc-800">{entry.claimedCapability}</td>
+                              <td className="py-3 px-4 text-zinc-700 font-mono text-xs">{entry.detectedBehavior}</td>
+                              <td className="py-3 px-4">
+                                <span className={cn("inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded capitalize", matchBadgeStyle(entry.match))}>
+                                  <MatchIcon match={entry.match} />
+                                  {entry.match}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-xs text-zinc-600 max-w-md">{entry.notes}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} className="py-6 text-center text-zinc-400 text-xs">No correlation records available.</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-              {/* RECOMMENDATIONS TAB */}
-              <TabsContent value="recommendations" className="space-y-3">
-                {report.recommendations.map((rec) => (
-                  <Card key={rec.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        {rec.severity === "critical" ? (
-                          <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                        ) : rec.severity === "high" ? (
-                          <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
-                        ) : (
-                          <Shield className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                        )}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-sm font-semibold text-zinc-900">{rec.title}</p>
-                            <Badge variant={rec.severity} className="capitalize">{rec.severity}</Badge>
-                          </div>
-                          <p className="text-sm text-zinc-600 mb-2">{rec.description}</p>
-                          <div className="rounded-md bg-zinc-50 border border-zinc-200 px-3 py-2">
-                            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-0.5">Action</p>
-                            <p className="text-xs font-mono text-zinc-700">{rec.action}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </TabsContent>
-
-              {/* TIMELINE TAB */}
-              <TabsContent value="timeline">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-zinc-400" />
-                      Verification Timeline
+            {/* TAB 3: Findings & CVEs */}
+            <TabsContent value="findings" className="space-y-4">
+              {/* Hardcoded Secrets */}
+              {report.secrets && report.secrets.length > 0 && (
+                <Card className="border-rose-200 bg-rose-50/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold text-rose-900 flex items-center gap-2">
+                      <Key className="h-4 w-4 text-rose-600" />
+                      Exposed Secrets & API Keys ({report.secrets.length})
                     </CardTitle>
-                    <CardDescription>
-                      Analysis completed in {analysisSeconds}s — {formatDateTime(report.createdAt)}
-                    </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div>
-                      {report.timeline.map((event) => (
-                        <TimelineRow key={event.id} event={event} />
-                      ))}
-                    </div>
+                  <CardContent className="space-y-2">
+                    {report.secrets.map((sec, i) => (
+                      <div key={i} className="p-2.5 bg-white rounded border border-rose-200 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-900">{sec.secret_type}</p>
+                          <p className="text-[11px] font-mono text-zinc-500">{sec.file_path}:{sec.line_number || 1}</p>
+                        </div>
+                        <code className="text-xs font-mono bg-rose-100/70 text-rose-800 px-2 py-1 rounded">
+                          {sec.redacted_value}
+                        </code>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
+              )}
+
+              {/* Vulnerabilities */}
+              {report.vulnerabilities && report.vulnerabilities.length > 0 && (
+                <Card className="border-amber-200 bg-amber-50/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                      <Package className="h-4 w-4 text-amber-600" />
+                      Vulnerable Third-Party Dependencies ({report.vulnerabilities.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {report.vulnerabilities.map((vuln, i) => (
+                      <div key={i} className="p-3 bg-white rounded border border-amber-200 flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <strong className="text-xs text-zinc-900">{vuln.cve_id}</strong>
+                            <span className="text-[11px] font-mono bg-zinc-100 text-zinc-700 px-1.5 py-0.5 rounded">
+                              {vuln.package_name}@{vuln.version}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-600 mt-1">{vuln.summary}</p>
+                        </div>
+                        <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] uppercase">{vuln.severity}</Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Static & Threat Findings */}
+              <Card className="border-zinc-200 bg-white">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold text-zinc-900">Static AST & Threat Pattern Findings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {report.findings && report.findings.length > 0 ? (
+                    report.findings.map((f, i) => (
+                      <div key={i} className="p-3 bg-zinc-50 rounded-lg border border-zinc-100 flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-zinc-900">{f.description}</span>
+                            {f.capability_label && (
+                              <Badge variant="outline" className="text-[10px] font-mono">{f.capability_label}</Badge>
+                            )}
+                          </div>
+                          {f.file_path && (
+                            <p className="text-[11px] font-mono text-zinc-500">
+                              {f.file_path}{f.line_number ? `:${f.line_number}` : ''}
+                            </p>
+                          )}
+                          {f.snippet && (
+                            <pre className="text-[11px] font-mono bg-zinc-900 text-zinc-100 p-2 rounded overflow-x-auto max-w-2xl">
+                              {f.snippet}
+                            </pre>
+                          )}
+                        </div>
+                        <Badge className={cn("text-[10px] uppercase font-semibold", riskLevelBg(f.severity as any))}>
+                          {f.severity}
+                        </Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-zinc-400 py-4 text-center">No static anomalies detected.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* TAB 4: Policy Decision */}
+            <TabsContent value="policy" className="space-y-4">
+              <Card className="border-zinc-200 bg-white">
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold text-zinc-900">Zero-Trust Policy Enforcement</CardTitle>
+                  <CardDescription className="text-xs text-zinc-500">
+                    Deterministic policy gate evaluation (100% deterministic, no non-deterministic hallucinations).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {report.policyEvaluations && report.policyEvaluations.length > 0 ? (
+                    report.policyEvaluations.map((pe) => (
+                      <div key={pe.id} className="p-4 bg-zinc-50 rounded-lg border border-zinc-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-zinc-900">{pe.policy_name || "Default Security Policy"}</h4>
+                            <p className="text-xs text-zinc-500">Evaluated deterministically against repository findings</p>
+                          </div>
+                          <PolicyBadge decision={pe.decision} />
+                        </div>
+
+                        {pe.triggered_rules_json && pe.triggered_rules_json.length > 0 && (
+                          <div className="space-y-1.5 pt-2 border-t border-zinc-200">
+                            <p className="text-[11px] font-semibold text-zinc-700 uppercase">Triggered Rules</p>
+                            {pe.triggered_rules_json.map((tr, idx) => (
+                              <div key={idx} className="text-xs bg-white p-2 rounded border border-zinc-200 flex items-center justify-between">
+                                <div>
+                                  <span className="font-semibold text-zinc-800">{tr.rule || "Policy Violation"}: </span>
+                                  <span className="text-zinc-600">{tr.reason}</span>
+                                </div>
+                                <span className="text-[10px] font-bold text-rose-700 uppercase">{tr.action}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs">
+                      Policy Decision: <strong>ALLOW</strong>. Repository adheres to all zero-trust criteria.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* TAB 5: AI Explanation & Remediation */}
+            <TabsContent value="ai-explanation" className="space-y-4">
+              <Card className="border-indigo-100 bg-indigo-50/20">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-indigo-600" />
+                    AI Intelligence Synthesis
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-white rounded-lg border border-indigo-100 text-xs text-zinc-700 leading-relaxed whitespace-pre-line">
+                    {report.aiExplanation || "Audit completed."}
+                  </div>
+
+                  {report.remediation && (
+                    <div className="p-4 bg-white rounded-lg border border-emerald-200 space-y-2">
+                      <h4 className="text-xs font-bold text-emerald-900 uppercase">Recommended Remediation Steps</h4>
+                      <div className="text-xs text-zinc-700 whitespace-pre-line leading-relaxed">
+                        {report.remediation}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* TAB 6: Ed25519 Signed Attestation */}
+            <TabsContent value="attestation" className="space-y-4">
+              <Card className="border-zinc-200 bg-white">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-zinc-900 flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                      Cryptographically Signed Attestation
+                    </CardTitle>
+                    <CardDescription className="text-xs text-zinc-500">
+                      Ed25519 signature over SHA-256 canonical hash of verified repository claims and behaviors.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-xs"
+                    onClick={() => verifyMutation.mutate()}
+                    disabled={verifyMutation.isPending}
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5", verifyMutation.isPending && "animate-spin")} />
+                    Verify Signature
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {verifyResult && (
+                    <div className={cn(
+                      "p-3 rounded-lg border text-xs flex items-center gap-2",
+                      verifyResult.valid ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"
+                    )}>
+                      {verifyResult.valid ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-600 shrink-0" />}
+                      <span>{verifyResult.message}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-3 bg-zinc-50 rounded border border-zinc-200 space-y-1">
+                      <span className="text-[11px] font-semibold text-zinc-500 uppercase">SHA-256 Content Hash</span>
+                      <p className="font-mono text-xs text-zinc-900 break-all select-all">
+                        {report.attestation?.content_hash || "Computing..."}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-zinc-50 rounded border border-zinc-200 space-y-1">
+                      <span className="text-[11px] font-semibold text-zinc-500 uppercase">Ed25519 Public Key</span>
+                      <p className="font-mono text-xs text-zinc-900 break-all select-all">
+                        {report.attestation?.public_key || "Published Key"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-zinc-50 rounded border border-zinc-200 space-y-1">
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase">Ed25519 Cryptographic Signature</span>
+                    <p className="font-mono text-xs text-zinc-800 break-all select-all bg-white p-2 rounded border border-zinc-200">
+                      {report.attestation?.signature || "Awaiting signature generation"}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
